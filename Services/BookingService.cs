@@ -19,20 +19,20 @@ public class BookingService : IBookingService
     // Validate: Start time must be before end time
     if (request.StartTime >= request.EndTime)
     {
-      throw new InvalidOperationException("Start time must be before end time.");
+      throw new ArgumentException("Start time must be before end time.");
     }
 
     // Validate: Bookings must not be in the past
     if (request.StartTime < DateTime.UtcNow)
     {
-      throw new InvalidOperationException("Cannot create bookings in the past.");
+      throw new ArgumentException("Cannot create bookings in the past.");
     }
 
     // Validate: Room must exist
     var room = await _context.Rooms.FindAsync(request.RoomId);
     if (room == null)
     {
-      throw new InvalidOperationException($"Room with ID {request.RoomId} does not exist.");
+      throw new KeyNotFoundException($"Room with ID {request.RoomId} does not exist.");
     }
 
     // Validate: Bookings must not overlap
