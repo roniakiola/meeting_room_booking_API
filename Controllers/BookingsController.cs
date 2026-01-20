@@ -66,7 +66,7 @@ public class BookingsController : ControllerBase
   /// </summary>
   /// <param name="id">The booking ID</param>
   /// <returns>No content if successful</returns>
-  [HttpDelete("{id}")]
+  [HttpDelete("{id:int}")]
   [ProducesResponseType(StatusCodes.Status204NoContent)]
   [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> CancelBooking(int id)

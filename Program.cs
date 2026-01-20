@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddOpenApi();
 
 // Configure EF Core with InMemory database
 builder.Services.AddDbContext<BookingDbContext>(options =>
@@ -24,6 +25,16 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
     context.Database.EnsureCreated();
+}
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/openapi/v1.json", "Meeting Room Booking API v1");
+        c.RoutePrefix = string.Empty;
+    });
 }
 
 // Configure the HTTP request pipeline
