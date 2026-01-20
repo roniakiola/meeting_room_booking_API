@@ -9,12 +9,10 @@ namespace MeetingRoomBookingAPI.Controllers;
 public class BookingsController : ControllerBase
 {
   private readonly IBookingService _bookingService;
-  private readonly ILogger<BookingsController> _logger;
 
-  public BookingsController(IBookingService bookingService, ILogger<BookingsController> logger)
+  public BookingsController(IBookingService bookingService)
   {
     _bookingService = bookingService;
-    _logger = logger;
   }
 
   /// <summary>
@@ -25,6 +23,8 @@ public class BookingsController : ControllerBase
   [HttpPost]
   [ProducesResponseType(typeof(BookingResponse), StatusCodes.Status201Created)]
   [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+  [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+  [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
   public async Task<IActionResult> CreateBooking([FromBody] CreateBookingRequest request)
   {
     try
@@ -32,13 +32,30 @@ public class BookingsController : ControllerBase
       var booking = await _bookingService.CreateBookingAsync(request);
       return CreatedAtAction(nameof(GetBookings), new { roomId = booking.RoomId }, booking);
     }
-    catch (InvalidOperationException ex)
+    catch (ArgumentException ex)
     {
-      _logger.LogWarning(ex, "Failed to create booking");
       return BadRequest(new ProblemDetails
       {
         Status = StatusCodes.Status400BadRequest,
-        Title = "Booking validation failed",
+        Title = "Invalid request",
+        Detail = ex.Message
+      });
+    }
+    catch (KeyNotFoundException ex)
+    {
+      return NotFound(new ProblemDetails
+      {
+        Status = StatusCodes.Status404NotFound,
+        Title = "Room not found",
+        Detail = ex.Message
+      });
+    }
+    catch (InvalidOperationException ex)
+    {
+      return Conflict(new ProblemDetails
+      {
+        Status = StatusCodes.Status409Conflict,
+        Title = "Booking conflict",
         Detail = ex.Message
       });
     }
