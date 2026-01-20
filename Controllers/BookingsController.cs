@@ -92,9 +92,22 @@ public class BookingsController : ControllerBase
   /// <returns>A list of bookings</returns>
   [HttpGet]
   [ProducesResponseType(typeof(List<BookingResponse>), StatusCodes.Status200OK)]
+  [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
   public async Task<IActionResult> GetBookings([FromQuery] int roomId)
   {
-    var bookings = await _bookingService.GetBookingsByRoomAsync(roomId);
-    return Ok(bookings);
+    try
+    {
+      var bookings = await _bookingService.GetBookingsByRoomAsync(roomId);
+      return Ok(bookings);
+    }
+    catch (KeyNotFoundException ex)
+    {
+      return NotFound(new ProblemDetails
+      {
+        Status = StatusCodes.Status404NotFound,
+        Title = "Room not found",
+        Detail = ex.Message
+      });
+    }
   }
 }

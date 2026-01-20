@@ -85,6 +85,12 @@ public class BookingService : IBookingService
 
   public async Task<List<BookingResponse>> GetBookingsByRoomAsync(int roomId)
   {
+    var roomExists = await _context.Rooms.AnyAsync(r => r.Id == roomId);
+    if (!roomExists)
+    {
+      throw new KeyNotFoundException($"Room with ID {roomId} does not exist.");
+    }
+
     var bookings = await _context.Bookings
         .Include(b => b.Room)
         .Where(b => b.RoomId == roomId)
