@@ -336,3 +336,231 @@ Done! The README.md is now minimal and contains no personal paths. It includes o
 
 **Assistant:**
 [This file was created]
+
+---
+
+## Prompt 8
+**User:**
+> Can you explain the use of InvalidOperationException in BookingService. How is this different from ArgumentException or Exception?
+
+**Assistant:**
+### `InvalidOperationException` vs `ArgumentException` vs `Exception`
+
+#### Why I Used `InvalidOperationException`
+
+In BookingService.cs, I throw `InvalidOperationException` for business rule violations:
+- Overlapping bookings
+- Bookings in the past
+- Start time after end time
+- Room doesn't exist
+
+**Rationale:**
+`InvalidOperationException` indicates that **the operation itself is invalid given the current state** of the system. The input format is correct (it's a valid `CreateBookingRequest`), but the business rules prevent this operation from succeeding.
+
+#### When to Use `ArgumentException`
+
+`ArgumentException` (or its variants like `ArgumentNullException`, `ArgumentOutOfRangeException`) should be used when **the argument value itself is invalid**, regardless of business state:
+
+```csharp
+// Examples where ArgumentException is appropriate:
+public async Task<Booking> GetBookingAsync(int id)
+{
+    if (id <= 0)
+        throw new ArgumentOutOfRangeException(nameof(id), "ID must be positive");
+    // ...
+}
+
+public async Task CreateBookingAsync(CreateBookingRequest request)
+{
+    if (request == null)
+        throw new ArgumentNullException(nameof(request));
+    // ...
+}
+```
+
+**Key difference:** `ArgumentException` is about **parameter validation** (wrong type, null, out of range), while `InvalidOperationException` is about **business logic validation** (operation not allowed in current state).
+
+#### Why Not Use Base `Exception`?
+
+Using `Exception` directly is bad practice because:
+- ❌ Too generic - doesn't convey meaning
+- ❌ Hard to catch specific errors
+- ❌ Violates principle of least surprise
+- ❌ Makes error handling less precise
+
+```csharp
+// BAD - catches everything, including system errors
+try { ... }
+catch (Exception ex) { ... }
+
+// GOOD - catches specific business errors
+try { ... }
+catch (InvalidOperationException ex) { ... }
+```
+
+#### Better Alternatives
+
+For a more robust solution, you could:
+
+**1. Custom Domain Exceptions:**
+```csharp
+public class BookingValidationException : Exception { }
+public class BookingOverlapException : BookingValidationException { }
+public class PastBookingException : BookingValidationException { }
+```
+
+**2. Use FluentValidation or ValidationException:**
+```csharp
+throw new ValidationException("Booking validation failed", errors);
+```
+
+**3. Return Result Objects (Railway-Oriented Programming):**
+```csharp
+public async Task<Result<BookingResponse>> CreateBookingAsync(...)
+{
+    if (hasOverlap)
+        return Result.Failure("Overlapping booking");
+    // ...
+}
+```
+
+#### Current Approach Trade-offs
+
+**Pros:**
+✅ Standard .NET exception - no custom types needed
+✅ Semantic meaning is clear
+✅ Controller catches it specifically
+
+**Cons:**
+❌ Can't distinguish between different validation failures without parsing message
+❌ Mixes different types of errors (overlap vs. past booking)
+❌ Exception-based flow control can impact performance
+
+For this simple API, `InvalidOperationException` is a reasonable choice. For production systems, custom exceptions or result types would be more maintainable.
+
+---
+
+## Prompt 9
+**User:**
+> What is the purpose of using typeof(BookingResponse) and typeof(ProblemDetails) on lines 26 and 27 of BookingController? Wouldn't just the status codes be sufficient here?
+
+**Assistant:**
+### Purpose of `typeof()` in `[ProducesResponseType]`
+
+The status codes alone would be **functionally sufficient for the API to work**, but the `typeof()` adds **metadata about the response body type**.
+
+#### What Each Part Does
+
+```csharp
+[ProducesResponseType(typeof(BookingResponse), StatusCodes.Status201Created)]
+```
+
+- **Status code (201)**: What HTTP status is returned
+- **typeof(BookingResponse)**: What the response body **looks like** (its shape/schema)
+
+#### Why It Matters
+
+**1. OpenAPI/Swagger Documentation** (when you add it later)
+Without `typeof()`:
+```json
+201 Created
+- No schema information
+- Just says "success"
+```
+
+With `typeof()`:
+```json
+201 Created
+{
+  "id": 0,
+  "roomId": 0,
+  "roomName": "string",
+  "startTime": "2026-01-20T09:00:00Z",
+  "endTime": "2026-01-20T10:00:00Z"
+}
+```
+
+**2. API Client Generation**
+Tools like NSwag or AutoRest use this metadata to generate strongly-typed client code:
+```csharp
+// Generated client knows the return type
+public async Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request)
+```
+
+**3. Runtime API Exploration**
+ASP.NET Core's `ApiExplorer` uses this metadata for runtime discovery - useful for building dynamic API documentation or testing tools.
+
+#### Without `typeof()` - What You'd Get
+
+```csharp
+[HttpPost]
+[ProducesResponseType(StatusCodes.Status201Created)]  // Just the status
+```
+
+This tells consumers:
+- ✅ "This endpoint returns 201"
+- ❌ "But we have no idea what the body contains"
+
+#### Is It Necessary?
+
+For **runtime behavior**: No, the API works the same
+For **API discoverability**: Yes, it's highly valuable
+
+Since you're planning to add Swagger later, keeping these is the right choice. When you enable Swagger, you'll immediately get rich, accurate documentation without touching the controller code again.
+
+#### Alternative Approach
+
+If you wanted to be more minimal and avoid the attributes entirely:
+```csharp
+[HttpPost]
+public async Task<ActionResult<BookingResponse>> CreateBooking([FromBody] CreateBookingRequest request)
+```
+
+The `ActionResult<T>` return type provides some type information automatically, but it's less explicit and won't cover error responses like `ProblemDetails` for 400/404.
+
+---
+
+## Prompt 10
+**User:**
+> I think the thrown exceptions needed more expression and made some modifications. Now I want you to reflect the BookingController to adhere to these changes. CreateBookingAsync should return 409 Conflict if overlap is detected
+
+**Assistant:**
+[Reviewed BookingService.cs and found modified exceptions:]
+- `ArgumentException` for validation errors (start/end time, past bookings)
+- `KeyNotFoundException` for non-existent rooms
+- `InvalidOperationException` for overlaps (should return 409 Conflict)
+
+[Updated BookingsController.cs to properly handle the new exception types:]
+- **`ArgumentException`** → 400 Bad Request (invalid start/end time, past bookings)
+- **`KeyNotFoundException`** → 404 Not Found (room doesn't exist)
+- **`InvalidOperationException`** → 409 Conflict (overlapping booking)
+
+Perfect! Updated BookingsController.cs to properly handle the new exception types. The controller now returns the semantically correct HTTP status code for booking conflicts (409), which properly indicates that the request is valid but conflicts with the current state of the resource.
+
+---
+
+## Prompt 11
+**User:**
+> Remove the logging even though it's good practice. This, however was not asked and adds unnecessary clutter for such as thin scope.
+
+**Assistant:**
+[Removed all logging from BookingsController.cs, including the logger dependency injection]
+
+Done! Removed all logging from BookingsController.cs, including the logger dependency injection.
+
+---
+
+## Prompt 12
+**User:**
+> I have removed HTTPS redirection and HTTPS-profile from launchSettings.json. Update README.md so that the reader can easily setup and run this project locally. Include how to access Swagger page.
+
+**Assistant:**
+[Checked launchSettings.json and found HTTP profile on port 5193]
+
+[Updated README.md with:]
+- Clear setup steps
+- Specific URL: `http://localhost:5193`
+- Swagger UI access at `http://localhost:5193/swagger`
+- Concrete curl examples with the correct localhost URL
+
+Updated README.md with clear instructions, specific URLs, and Swagger access information.
