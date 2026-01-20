@@ -5,13 +5,6 @@ using MeetingRoomBookingAPI.Models;
 
 namespace MeetingRoomBookingAPI.Services;
 
-public interface IBookingService
-{
-  Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request);
-  Task<bool> CancelBookingAsync(int id);
-  Task<List<BookingResponse>> GetBookingsByRoomAsync(int roomId);
-}
-
 public class BookingService : IBookingService
 {
   private readonly BookingDbContext _context;
